@@ -1,0 +1,6 @@
+.idea/
+.playgroud/
+target/
+out/
+*.iml
+*.ttf

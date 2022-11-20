@@ -1,0 +1,12 @@
+[package]
+name = "ft"
+version = "0.1.0"
+authors = ["Piotr Dobiech"]
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.66"
+fontdue = "0.7.2"
+framebuffer = "0.3.1"
+nix = "0.25.0"
+pico-args = "0.5.0"
