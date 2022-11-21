@@ -13,7 +13,6 @@ Arguments:
 Options:
   -f, --font-path PATH       Sets font path [default: font.ttf]
   -s, --font-size-px NUMBER  Sets font size [default: 16]
-  -a, --disable-subpixel-aa  Disables subpixel antialiasing
   -d, --fb-device-path PATH  Sets framebuffer device path [default: /dev/fb0]
   -h, --help                 Prints help information
 ";
@@ -22,7 +21,6 @@ Options:
 pub struct Args {
     pub font_path: String,
     pub font_size_px: u32,
-    pub font_subpixel_antialiasing: bool,
     pub framebuffer_device_path: String,
     pub shell_path: String,
 }
@@ -43,7 +41,6 @@ impl Args {
             font_size_px: pico_args
                 .opt_value_from_str(["-s", "--font-size-px"])?
                 .unwrap_or(16),
-            font_subpixel_antialiasing: !pico_args.contains(["-a", "--disable-subpixel-aa"]),
             framebuffer_device_path: pico_args
                 .opt_value_from_str(["-d", "--fb-device-path"])?
                 .unwrap_or_else(|| "/dev/fb0".to_owned()),
