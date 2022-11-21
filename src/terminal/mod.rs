@@ -2,7 +2,6 @@ use crate::dimension::{Cells, Dimensions, Pixels};
 use crate::display::Display;
 use crate::font::FontRenderer;
 use crate::point::Point;
-use crate::rgb::Rgb;
 use crate::terminal::line::Line;
 
 pub mod line;
@@ -42,29 +41,15 @@ impl Terminal {
 
     fn render_character(&mut self, character: char, cell: Point<Cells>) {
         debug_assert!(self.size.contains(cell));
-        let (metrics, raster) = self.font.create_raster(character);
-        let line_metrics = self
-            .font
-            .font
-            .horizontal_line_metrics(self.font.size)
-            .unwrap();
-        for x in 0..metrics.width {
-            for y in 0..metrics.height {
-                let index = y * metrics.width + x;
-                let raster_pixel = raster[index];
 
-                let point = Point::new(
-                    (metrics.xmin + x as i32) as u32
-                        + (cell.horizontal_distance() * self.cell_size.width()),
-                    (((-metrics.bounds.height - metrics.bounds.ymin).floor()
-                        + line_metrics.ascent.ceil()) as u32
-                        + y as u32)
-                        + (cell.vertical_distance() * self.cell_size.height()),
-                );
-                let mut display_pixel = self.display.pixel_mut(point);
-                let rgb = Rgb::new_gray(raster_pixel);
-                display_pixel.set_rgb(rgb);
-            }
+        let cell_origin = cell.to_pixels(self.cell_size);
+        let raster = self.font.create_raster(character);
+        for (point, color) in raster {
+            debug_assert!(self.cell_size.contains(point));
+
+            let display_point = point.with_origin(cell_origin);
+            let mut display_pixel = self.display.pixel_mut(display_point);
+            display_pixel.set_rgb(color);
         }
     }
 }
