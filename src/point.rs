@@ -3,13 +3,13 @@ use std::marker::PhantomData;
 use crate::dimension::{Cells, Dimensions, Pixels};
 
 #[derive(Debug, Copy, Clone)]
-pub struct Point<U> {
+pub struct Point<Unit> {
     horizontal_distance: u32,
     vertical_distance: u32,
-    unit: PhantomData<U>,
+    unit: PhantomData<Unit>,
 }
 
-impl<U> Point<U> {
+impl<Unit> Point<Unit> {
     pub fn new(horizontal_distance: u32, vertical_distance: u32) -> Self {
         Self {
             horizontal_distance,
@@ -18,7 +18,7 @@ impl<U> Point<U> {
         }
     }
 
-    pub fn with_origin(&self, origin: Point<U>) -> Point<U> {
+    pub fn with_origin(&self, origin: Point<Unit>) -> Point<Unit> {
         let horizontal_distance = origin.horizontal_distance + self.horizontal_distance;
         let vertical_distance = origin.vertical_distance + self.vertical_distance;
         Point::new(horizontal_distance, vertical_distance)
