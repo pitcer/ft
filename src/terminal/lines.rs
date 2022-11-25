@@ -17,6 +17,11 @@ impl Lines {
         }
     }
 
+    pub fn push_char(&mut self, character: char) {
+        let back = self.lines.back_mut().unwrap();
+        back.text.push(character);
+    }
+
     pub fn push_line(&mut self, line: String) {
         if self.current_lines == self.line_count {
             self.lines.pop_front();

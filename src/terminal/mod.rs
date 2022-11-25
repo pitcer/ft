@@ -1,4 +1,16 @@
+use std::ffi::CString;
+use std::os::unix::io::RawFd;
+use std::slice;
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use anyhow::Result;
+use lazy_static::lazy_static;
+use nix::pty::Winsize;
+use nix::sys::epoll::{EpollEvent, EpollFlags, EpollOp};
+use nix::sys::signal::{SigHandler, Signal};
+use nix::sys::{epoll, signal, wait};
+use nix::unistd::{ForkResult, Pid};
+use nix::{libc, pty, unistd};
 
 use crate::display::Display;
 use crate::font::FontRenderer;
@@ -10,29 +22,64 @@ use crate::terminal::renderer::TerminalRenderer;
 pub mod lines;
 pub mod renderer;
 
-const BLOCK_CHARACTER: char = '█';
+lazy_static! {
+    static ref SIGCHLD_FLAG: AtomicBool = AtomicBool::new(false);
+}
 
-// End of transmission
-const EOT: u8 = 4;
+extern "C" fn handle_sigchld(signal: libc::c_int) {
+    let signal = Signal::try_from(signal).unwrap();
+    let _result = wait::wait().unwrap();
+    SIGCHLD_FLAG.store(signal == Signal::SIGCHLD, Ordering::Relaxed);
+}
+
+const BLOCK_CHARACTER: char = '█';
 
 #[derive(Debug)]
 pub struct Terminal {
     input: InputTerminal,
     renderer: TerminalRenderer,
     lines: Lines,
+    master_fd: RawFd,
+    child: Pid,
 }
 
 impl Terminal {
-    pub fn new(input: InputTerminal, display: Display, font: FontRenderer) -> Self {
+    pub fn new(input: InputTerminal, display: Display, font: FontRenderer) -> Result<Self> {
         let display_size = display.size();
         let cell_size = font.character_size(BLOCK_CHARACTER);
         let size = display_size.fit_cells(cell_size);
         let renderer = TerminalRenderer::new(display, font, size, cell_size);
         let lines = Lines::new(size.height() as usize);
-        Self {
-            input,
-            renderer,
-            lines,
+
+        let size = Winsize {
+            ws_row: size.height() as libc::c_ushort,
+            ws_col: size.width() as libc::c_ushort,
+            ws_xpixel: 0, // unused
+            ws_ypixel: 0, // unused
+        };
+        let result = unsafe { pty::forkpty(Some(&size), None)? };
+        match result.fork_result {
+            ForkResult::Parent { child } => {
+                let handler = SigHandler::Handler(handle_sigchld);
+                unsafe {
+                    signal::signal(Signal::SIGCHLD, handler)?;
+                }
+
+                Ok(Self {
+                    input,
+                    renderer,
+                    lines,
+                    master_fd: result.master,
+                    child,
+                })
+            }
+            ForkResult::Child => {
+                unistd::execv(
+                    &CString::new("/usr/bin/sh")?,
+                    &[CString::new("/usr/bin/sh")?],
+                )?;
+                unreachable!()
+            }
         }
     }
 
@@ -41,18 +88,51 @@ impl Terminal {
         self.lines.push_line("ft 0.1.0".to_owned());
         self.render();
 
-        loop {
-            let byte = self.input.read_byte();
-            let Some(byte) = byte else { continue; };
-            let byte = byte?;
-            if byte == EOT {
-                return Ok(());
+        self.lines.push_line("".to_owned());
+
+        let epoll = epoll::epoll_create()?;
+        let mut event = EpollEvent::new(EpollFlags::EPOLLIN, self.master_fd as u64);
+        epoll::epoll_ctl(
+            epoll,
+            EpollOp::EpollCtlAdd,
+            self.master_fd,
+            Some(&mut event),
+        )?;
+        let mut event = EpollEvent::new(EpollFlags::EPOLLIN, libc::STDIN_FILENO as u64);
+        epoll::epoll_ctl(
+            epoll,
+            EpollOp::EpollCtlAdd,
+            libc::STDIN_FILENO,
+            Some(&mut event),
+        )?;
+
+        let mut events = EpollEvent::empty();
+
+        while !SIGCHLD_FLAG.load(Ordering::Relaxed) {
+            let count = epoll::epoll_wait(epoll, slice::from_mut(&mut events), -1)?;
+            assert_eq!(count, 1);
+
+            let fd = events.data();
+            let mut byte = 0;
+            let bytes_read = unistd::read(fd as RawFd, slice::from_mut(&mut byte))?;
+            assert_eq!(bytes_read, 1);
+
+            if fd == 0 {
+                unistd::write(self.master_fd, slice::from_ref(&byte))?;
+                continue;
+            }
+
+            if byte == 13 {
+                self.lines.push_line("".to_owned());
+                continue;
             }
 
             self.renderer.clear();
-            self.lines.push_line(format!("'{}' {}", byte as char, byte));
+            self.lines.push_char(byte as char);
             self.render();
         }
+
+        Ok(())
     }
 
     fn render(&mut self) {
