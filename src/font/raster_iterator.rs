@@ -1,5 +1,5 @@
 use std::iter::Enumerate;
-use std::vec::IntoIter;
+use std::slice::Iter;
 
 use fontdue::Metrics;
 
@@ -7,17 +7,17 @@ use crate::dimension::Pixels;
 use crate::point::Point;
 use crate::rgb::Rgb;
 
-pub struct RasterIterator {
+pub struct RasterIterator<'a> {
     metrics: Metrics,
     ascent: i32,
-    raster_iterator: Enumerate<IntoIter<u8>>,
+    raster_iterator: Enumerate<Iter<'a, u8>>,
 }
 
-impl RasterIterator {
-    pub fn new(metrics: Metrics, raster: Vec<u8>, ascent: i32) -> Self {
+impl<'a> RasterIterator<'a> {
+    pub fn new(metrics: Metrics, raster: &'a Vec<u8>, ascent: i32) -> Self {
         debug_assert_eq!(raster.len(), metrics.width * metrics.height);
 
-        let raster_iterator = raster.into_iter().enumerate();
+        let raster_iterator = raster.iter().enumerate();
         Self {
             metrics,
             ascent,
@@ -26,7 +26,7 @@ impl RasterIterator {
     }
 }
 
-impl Iterator for RasterIterator {
+impl<'a> Iterator for RasterIterator<'a> {
     type Item = (Point<Pixels>, Rgb);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -40,7 +40,7 @@ impl Iterator for RasterIterator {
         debug_assert!(vertical_distance >= 0);
 
         let point = Point::new(horizontal_distance as u32, vertical_distance as u32);
-        let rgb = Rgb::new_gray(gray);
+        let rgb = Rgb::new_gray(*gray);
 
         Some((point, rgb))
     }

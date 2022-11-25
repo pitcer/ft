@@ -1,18 +1,24 @@
 use std::fs;
+use std::num::NonZeroUsize;
 
 use anyhow::{anyhow, Result};
-use fontdue::{Font, FontSettings};
+use fontdue::{Font, FontSettings, Metrics};
+use lru::LruCache;
 
 use crate::dimension::{Dimensions, Pixels};
 use crate::font::raster_iterator::RasterIterator;
 
 pub mod raster_iterator;
 
+// SAFETY: 256 is not equal to 0
+const CACHE_CAPACITY: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(256) };
+
 #[derive(Debug)]
 pub struct FontRenderer {
     size: f32,
     font: Font,
     ascent: i32,
+    cache: LruCache<char, (Metrics, Vec<u8>)>,
 }
 
 impl FontRenderer {
@@ -28,12 +34,21 @@ impl FontRenderer {
             .ok_or_else(|| anyhow!("Missing horizontal line metrics"))?;
         let ascent = line_metrics.ascent.ceil() as i32;
 
-        Ok(Self { size, font, ascent })
+        let cache = LruCache::new(CACHE_CAPACITY);
+
+        Ok(Self {
+            size,
+            font,
+            ascent,
+            cache,
+        })
     }
 
-    pub fn create_raster(&self, character: char) -> RasterIterator {
-        let (metrics, raster) = self.font.rasterize(character, self.size);
-        RasterIterator::new(metrics, raster, self.ascent)
+    pub fn create_raster(&mut self, character: char) -> RasterIterator {
+        let (metrics, raster) = self
+            .cache
+            .get_or_insert(character, || self.font.rasterize(character, self.size));
+        RasterIterator::new(*metrics, raster, self.ascent)
     }
 
     pub fn character_size(&self, character: char) -> Dimensions<Pixels> {
