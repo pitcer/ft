@@ -13,6 +13,6 @@ opt-level = 1
 rustflags = [
     "-Clink-arg=-fuse-ld=lld",
     "-Ctarget-cpu=native",
-    #"-Cforce-frame-pointers=no",
-    #"-Cforce-unwind-tables=no"
+    "-Cforce-frame-pointers=no",
+    "-Cforce-unwind-tables=no"
 ]

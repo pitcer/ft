@@ -15,11 +15,13 @@ use crate::spatial::point::Point;
 use crate::terminal::cells::line::RendererAction;
 use crate::terminal::cells::Cells;
 use crate::terminal::event::Events;
+use crate::terminal::parser::{Parser, ParserAction};
 use crate::terminal::renderer::TerminalRenderer;
 use crate::terminal::shell::Shell;
 
 mod cells;
 mod event;
+mod parser;
 pub mod renderer;
 mod shell;
 
@@ -34,6 +36,7 @@ pub struct Terminal {
     renderer: TerminalRenderer,
     cells: Cells,
     events: Events,
+    parser: Parser,
 }
 
 impl Terminal {
@@ -50,6 +53,7 @@ impl Terminal {
         let renderer = TerminalRenderer::new(display, font, size, cell_size);
         let cells = Cells::new(size);
         let events = Events::new()?;
+        let parser = Parser::new();
 
         Ok(Self {
             input,
@@ -57,6 +61,7 @@ impl Terminal {
             cells,
             events,
             shell,
+            parser,
         })
     }
 
@@ -128,49 +133,97 @@ impl Terminal {
                     continue;
                 }
 
-                self.handle_bytes(bytes);
+                self.handle_bytes(bytes)?;
             }
         }
     }
 
-    fn handle_bytes(&mut self, bytes: &[u8]) {
+    fn handle_bytes(&mut self, bytes: &[u8]) -> Result<()> {
         let mut refresh = false;
         for byte in bytes {
             let byte = *byte;
-
-            if byte == 13 {
-                self.cells.carriage_return();
-                continue;
-            }
-
-            if byte == 10 {
-                let action = self.cells.new_line();
-                if let Some(RendererAction::RenderAll) = action {
-                    refresh = true;
+            let action = self.parser.push_byte(byte)?;
+            match action {
+                ParserAction::InsertCharacter(character) => {
+                    self.push_character(Some(character));
                 }
-                continue;
+                ParserAction::CarriageReturn => {
+                    self.cells.carriage_return();
+                }
+                ParserAction::NewLine => {
+                    let action = self.cells.new_line();
+                    if let Some(RendererAction::RenderAll) = action {
+                        refresh = true;
+                    }
+                }
+                ParserAction::MoveCursorUp(up) => {
+                    for _ in 0..up {
+                        self.cells.move_up();
+                    }
+                }
+                ParserAction::MoveCursorDown(down) => {
+                    for _ in 0..down {
+                        let action = self.cells.new_line();
+                        if let Some(RendererAction::RenderAll) = action {
+                            refresh = true;
+                        }
+                    }
+                }
+                ParserAction::MoveCursorForward(forward) => {
+                    for _ in 0..forward {
+                        self.push_character(None);
+                    }
+                }
+                ParserAction::MoveCursorBack(back) => {
+                    for _ in 0..back {
+                        self.cells.move_back();
+                    }
+                }
+                ParserAction::MoveCursorToNextMultipleOf(multiple) => {
+                    let horizontal_distance = self.cells.current_cell().horizontal_distance();
+                    let forward = horizontal_distance % multiple;
+                    for _ in 0..forward {
+                        self.push_character(None);
+                    }
+                }
+                ParserAction::EnableBracketedPasteMode => {
+                    log::warn!("Unsupported sequence EnableBracketedPasteMode");
+                }
+                ParserAction::DisableBracketedPasteMode => {
+                    log::warn!("Unsupported sequence DisableBracketedPasteMode");
+                }
+                ParserAction::Clear => {
+                    self.cells.clear();
+                    self.render_all();
+                }
+                ParserAction::MoreBytes => {}
+                ParserAction::Ignore => {}
+                ParserAction::UnsupportedSequence => {
+                    log::warn!("Parser received invalid bytes");
+                }
             }
-
-            self.push_character(byte as char);
         }
 
         if refresh {
             self.render_all();
         }
+
+        Ok(())
     }
 
     fn push_string(&mut self, string: &str) {
         for character in string.chars() {
-            self.push_character(character);
+            self.push_character(Some(character));
         }
     }
 
-    fn push_character(&mut self, character: char) {
+    fn push_character(&mut self, character: Option<char>) {
         let action = self.cells.push_character(character);
         match action {
             RendererAction::RenderAll => self.render_all(),
             RendererAction::RenderCell(cell) => {
                 self.renderer.fill_cell(cell, BACKGROUND_COLOR);
+                let Some(character) = character else { return; };
                 self.renderer
                     .render_character(character, cell, FONT_COLOR, BACKGROUND_COLOR);
             }

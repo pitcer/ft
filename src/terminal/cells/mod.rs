@@ -31,11 +31,11 @@ impl Cells {
         }
     }
 
-    pub fn push_character(&mut self, character: char) -> RendererAction {
+    pub fn push_character(&mut self, character: Option<char>) -> RendererAction {
         let cell_point = self.current_cell;
 
         let cell = self.cell_mut(cell_point);
-        *cell.character_mut() = Some(character);
+        *cell.character_mut() = character;
 
         if self.current_cell.horizontal_distance() == self.size.width() - 1 {
             self.carriage_return();
@@ -56,6 +56,26 @@ impl Cells {
         log::trace!("New current cell: {:?}", self.current_cell);
     }
 
+    pub fn move_back(&mut self) {
+        if self.current_cell.horizontal_distance() == 0 {
+            let vertical_distance = self.current_cell.vertical_distance();
+            if vertical_distance > 0 {
+                self.current_cell = Point::new(self.size.width() - 1, vertical_distance - 1);
+                log::trace!("New current cell: {:?}", self.current_cell);
+            }
+        } else {
+            self.current_cell = self.current_cell.shifted(-1, 0);
+            log::trace!("New current cell: {:?}", self.current_cell);
+        }
+    }
+
+    pub fn move_up(&mut self) {
+        if self.current_cell.vertical_distance() > 0 {
+            self.current_cell = self.current_cell.shifted(0, -1);
+            log::trace!("New current cell: {:?}", self.current_cell);
+        }
+    }
+
     pub fn new_line(&mut self) -> Option<RendererAction> {
         if self.current_cell.vertical_distance() == self.size.height() - 1 {
             self.lines.rotate_left(1);
@@ -74,10 +94,21 @@ impl Cells {
         self.lines.iter()
     }
 
+    pub fn clear(&mut self) {
+        for line in &mut self.lines {
+            line.clear();
+        }
+        self.current_cell = Point::new(0, 0);
+    }
+
     fn cell_mut(&mut self, cell: Point<CellsUnit>) -> &mut Cell {
         let line_index = cell.vertical_distance() as usize;
         let line = &mut self.lines[line_index];
         let cell_index = cell.horizontal_distance() as usize;
         line.cell_mut(cell_index)
+    }
+
+    pub fn current_cell(&self) -> Point<CellsUnit> {
+        self.current_cell
     }
 }
