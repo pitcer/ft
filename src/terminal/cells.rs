@@ -76,10 +76,6 @@ impl Cells {
         let cell_index = cell.horizontal_distance() as usize;
         &mut line.cells[cell_index]
     }
-
-    pub fn current_cell(&self) -> Point<CellsUnit> {
-        self.current_cell
-    }
 }
 
 #[derive(Debug, Clone)]

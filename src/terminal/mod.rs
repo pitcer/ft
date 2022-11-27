@@ -12,11 +12,11 @@ use nix::sys::{epoll, signal, wait};
 use nix::unistd::{ForkResult, Pid};
 use nix::{libc, pty, unistd};
 
+use crate::color::Rgb;
 use crate::display::Display;
 use crate::font::FontRenderer;
 use crate::input::InputTerminal;
 use crate::point::Point;
-use crate::rgb::Rgb;
 use crate::terminal::cells::{Cells, RendererAction};
 use crate::terminal::renderer::TerminalRenderer;
 
@@ -34,7 +34,8 @@ extern "C" fn handle_sigchld(signal: libc::c_int) {
 }
 
 const BLOCK_CHARACTER: char = '█';
-const BACKGROUND_COLOR: Rgb = Rgb::new_gray(32);
+const BACKGROUND_COLOR: Rgb = Rgb::new(32, 32, 32);
+const FONT_COLOR: Rgb = Rgb::new(249, 250, 244);
 
 #[derive(Debug)]
 pub struct Terminal {
@@ -161,7 +162,8 @@ impl Terminal {
             RendererAction::RenderAll => self.render_all(),
             RendererAction::RenderCell(cell) => {
                 self.renderer.fill_cell(cell, BACKGROUND_COLOR);
-                self.renderer.render_character(character, cell);
+                self.renderer
+                    .render_character(character, cell, FONT_COLOR, BACKGROUND_COLOR);
             }
         }
     }
@@ -174,7 +176,8 @@ impl Terminal {
                 let character = character.character();
                 let Some(character) = character else { continue; };
                 let cell = Point::new(character_index as u32, index as u32);
-                self.renderer.render_character(character, cell);
+                self.renderer
+                    .render_character(character, cell, FONT_COLOR, BACKGROUND_COLOR);
             }
         }
     }

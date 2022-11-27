@@ -1,4 +1,4 @@
-use crate::rgb::Rgb;
+use crate::color::Rgb;
 
 #[derive(Debug)]
 pub struct DisplayPixel<'a>(&'a mut [u8; 4]);

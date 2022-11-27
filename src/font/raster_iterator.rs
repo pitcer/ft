@@ -3,9 +3,9 @@ use std::slice::Iter;
 
 use fontdue::Metrics;
 
+use crate::color::Alpha;
 use crate::dimension::PixelsUnit;
 use crate::point::Point;
-use crate::rgb::Rgb;
 
 pub struct RasterIterator<'a> {
     metrics: Metrics,
@@ -27,10 +27,10 @@ impl<'a> RasterIterator<'a> {
 }
 
 impl<'a> Iterator for RasterIterator<'a> {
-    type Item = (Point<PixelsUnit>, Rgb);
+    type Item = (Point<PixelsUnit>, Alpha);
 
     fn next(&mut self) -> Option<Self::Item> {
-        let (index, gray) = self.raster_iterator.next()?;
+        let (index, alpha) = self.raster_iterator.next()?;
 
         let horizontal_distance = self.metrics.xmin + (index % self.metrics.width) as i32;
         debug_assert!(horizontal_distance >= 0);
@@ -40,9 +40,9 @@ impl<'a> Iterator for RasterIterator<'a> {
         debug_assert!(vertical_distance >= 0);
 
         let point = Point::new(horizontal_distance as u32, vertical_distance as u32);
-        let rgb = Rgb::new_gray(*gray);
+        let alpha = Alpha::new(*alpha);
 
-        Some((point, rgb))
+        Some((point, alpha))
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {

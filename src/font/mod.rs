@@ -45,9 +45,8 @@ impl FontRenderer {
     }
 
     pub fn create_raster(&mut self, character: char) -> RasterIterator {
-        let (metrics, raster) = self
-            .cache
-            .get_or_insert(character, || self.font.rasterize(character, self.size));
+        let rasterize = || self.font.rasterize(character, self.size);
+        let (metrics, raster) = self.cache.get_or_insert(character, rasterize);
         RasterIterator::new(*metrics, raster, self.ascent)
     }
 
