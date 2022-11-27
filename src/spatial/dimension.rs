@@ -1,12 +1,7 @@
 use std::marker::PhantomData;
 
-use crate::point::Point;
-
-#[derive(Debug, Copy, Clone)]
-pub struct PixelsUnit;
-
-#[derive(Debug, Copy, Clone)]
-pub struct CellsUnit;
+use crate::spatial::point::Point;
+use crate::spatial::{CellsUnit, PixelsUnit};
 
 #[derive(Debug, Copy, Clone)]
 pub struct Dimensions<Unit> {

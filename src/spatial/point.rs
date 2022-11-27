@@ -1,7 +1,8 @@
 use std::marker::PhantomData;
 use std::ops::Add;
 
-use crate::dimension::{CellsUnit, Dimensions, PixelsUnit};
+use crate::spatial::dimension::Dimensions;
+use crate::spatial::{CellsUnit, PixelsUnit};
 
 #[derive(Debug, Copy, Clone)]
 pub struct Point<Unit> {

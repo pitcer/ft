@@ -1,8 +1,9 @@
 use std::collections::vec_deque::Iter;
 use std::collections::VecDeque;
 
-use crate::dimension::{CellsUnit, Dimensions};
-use crate::point::Point;
+use crate::spatial::dimension::Dimensions;
+use crate::spatial::point::Point;
+use crate::spatial::CellsUnit;
 
 #[derive(Debug)]
 pub struct Cells {

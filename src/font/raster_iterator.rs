@@ -4,8 +4,8 @@ use std::slice::Iter;
 use fontdue::Metrics;
 
 use crate::color::Alpha;
-use crate::dimension::PixelsUnit;
-use crate::point::Point;
+use crate::spatial::point::Point;
+use crate::spatial::PixelsUnit;
 
 pub struct RasterIterator<'a> {
     metrics: Metrics,

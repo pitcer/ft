@@ -16,7 +16,7 @@ use crate::color::Rgb;
 use crate::display::Display;
 use crate::font::FontRenderer;
 use crate::input::InputTerminal;
-use crate::point::Point;
+use crate::spatial::point::Point;
 use crate::terminal::cells::{Cells, RendererAction};
 use crate::terminal::renderer::TerminalRenderer;
 

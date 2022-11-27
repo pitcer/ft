@@ -11,13 +11,12 @@ use crate::input::InputTerminal;
 use crate::terminal::Terminal;
 
 mod args;
-mod dimension;
+mod color;
 mod display;
 mod font;
 mod input;
-mod point;
+mod spatial;
 mod terminal;
-mod color;
 
 fn main() -> Result<()> {
     let config = ConfigBuilder::new().set_time_format_rfc3339().build();

@@ -1,8 +1,9 @@
 use crate::color::Rgb;
-use crate::dimension::{CellsUnit, Dimensions, PixelsUnit};
 use crate::display::Display;
 use crate::font::FontRenderer;
-use crate::point::Point;
+use crate::spatial::dimension::Dimensions;
+use crate::spatial::point::Point;
+use crate::spatial::{CellsUnit, PixelsUnit};
 
 #[derive(Debug)]
 pub struct TerminalRenderer {

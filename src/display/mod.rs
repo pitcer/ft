@@ -3,9 +3,10 @@ use std::slice;
 use anyhow::Result;
 use framebuffer::Framebuffer;
 
-use crate::dimension::{Dimensions, PixelsUnit};
 use crate::display::pixel::DisplayPixel;
-use crate::point::Point;
+use crate::spatial::dimension::Dimensions;
+use crate::spatial::point::Point;
+use crate::spatial::PixelsUnit;
 
 pub mod pixel;
 

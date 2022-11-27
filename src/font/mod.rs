@@ -5,8 +5,9 @@ use anyhow::{anyhow, Result};
 use fontdue::{Font, FontSettings, Metrics};
 use lru::LruCache;
 
-use crate::dimension::{Dimensions, PixelsUnit};
 use crate::font::raster_iterator::RasterIterator;
+use crate::spatial::dimension::Dimensions;
+use crate::spatial::PixelsUnit;
 
 pub mod raster_iterator;
 
