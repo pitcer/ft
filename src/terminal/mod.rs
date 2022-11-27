@@ -139,7 +139,6 @@ impl Terminal {
     }
 
     fn handle_bytes(&mut self, bytes: &[u8]) -> Result<()> {
-        let mut refresh = false;
         for byte in bytes {
             let byte = *byte;
             let action = self.parser.push_byte(byte)?;
@@ -151,10 +150,7 @@ impl Terminal {
                     self.cells.carriage_return();
                 }
                 ParserAction::NewLine => {
-                    let action = self.cells.new_line();
-                    if let Some(RendererAction::RenderAll) = action {
-                        refresh = true;
-                    }
+                    self.cells.new_line();
                 }
                 ParserAction::MoveCursorUp(up) => {
                     for _ in 0..up {
@@ -163,10 +159,7 @@ impl Terminal {
                 }
                 ParserAction::MoveCursorDown(down) => {
                     for _ in 0..down {
-                        let action = self.cells.new_line();
-                        if let Some(RendererAction::RenderAll) = action {
-                            refresh = true;
-                        }
+                        self.cells.new_line();
                     }
                 }
                 ParserAction::MoveCursorForward(forward) => {
@@ -204,9 +197,9 @@ impl Terminal {
             }
         }
 
-        if refresh {
-            self.render_all();
-        }
+        self.render_all();
+        let current_cell = self.cells.current_cell();
+        self.renderer.fill_cell(current_cell, FONT_COLOR);
 
         Ok(())
     }
