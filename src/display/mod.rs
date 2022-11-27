@@ -1,3 +1,4 @@
+use std::os::unix::io::{AsRawFd, RawFd};
 use std::slice;
 
 use anyhow::Result;
@@ -54,5 +55,9 @@ impl Display {
         let width = self.framebuffer.var_screen_info.xres;
         let height = self.framebuffer.var_screen_info.yres;
         Dimensions::new(width, height)
+    }
+
+    pub fn device_fd(&self) -> RawFd {
+        self.framebuffer.device.as_raw_fd()
     }
 }

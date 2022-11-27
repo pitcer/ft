@@ -43,9 +43,8 @@ fn start() -> Result<()> {
     let input = InputTerminal::initialize()?;
     let display = Display::new(&args.framebuffer_device_path)?;
     let font = FontRenderer::new(args.font_size_px, &args.font_path)?;
-    let mut terminal = Terminal::new(input, display, font)?;
+    let terminal = Terminal::new(input, display, font, &args.shell_path)?;
     terminal.run()?;
-    terminal.finish()?;
 
     Ok(())
 }

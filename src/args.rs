@@ -8,7 +8,7 @@ Usage:
   ft [OPTIONS] [SHELL]
 
 Arguments:
-  [SHELL]  Sets shell to run [default: /usr/bin/bash]
+  [SHELL]  Sets shell to run [default: /usr/bin/sh]
 
 Options:
   -f, --font-path PATH       Sets font path [default: font.ttf]
@@ -46,7 +46,7 @@ impl Args {
                 .unwrap_or_else(|| "/dev/fb0".to_owned()),
             shell_path: pico_args
                 .opt_free_from_str()?
-                .unwrap_or_else(|| "/usr/bin/bash".to_owned()),
+                .unwrap_or_else(|| "/usr/bin/sh".to_owned()),
         };
 
         let remaining = pico_args.finish();

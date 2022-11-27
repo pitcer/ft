@@ -1,6 +1,7 @@
 use anyhow::Result;
 use nix::sys::epoll;
 use nix::sys::epoll::{EpollEvent, EpollFlags, EpollOp};
+use nix::unistd;
 use std::os::unix::io::RawFd;
 
 #[derive(Debug)]
@@ -20,8 +21,18 @@ impl Events {
         Ok(())
     }
 
+    pub fn unregister_event(&mut self, fd: RawFd) -> Result<()> {
+        epoll::epoll_ctl(self.epoll, EpollOp::EpollCtlDel, fd, None)?;
+        Ok(())
+    }
+
     pub fn wait<'a>(&mut self, buffer: &'a mut [EpollEvent]) -> Result<&'a mut [EpollEvent]> {
         let count = epoll::epoll_wait(self.epoll, buffer, -1)?;
         Ok(&mut buffer[0..count])
+    }
+
+    pub fn finish(self) -> Result<()> {
+        unistd::close(self.epoll)?;
+        Ok(())
     }
 }

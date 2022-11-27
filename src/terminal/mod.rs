@@ -1,15 +1,11 @@
-use std::ffi::CString;
 use std::os::unix::io::RawFd;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::Result;
-use lazy_static::lazy_static;
-use nix::pty::Winsize;
-use nix::sys::epoll::EpollEvent;
-use nix::sys::signal::{SaFlags, SigAction, SigHandler, SigSet, Signal};
-use nix::sys::{signal, wait};
-use nix::unistd::ForkResult;
-use nix::{libc, pty, unistd};
+use nix::errno::Errno;
+use nix::sys::epoll::{EpollEvent, EpollFlags};
+use nix::sys::wait;
+use nix::sys::wait::{Id, WaitPidFlag};
+use nix::unistd;
 
 use crate::color::Rgb;
 use crate::display::Display;
@@ -20,20 +16,12 @@ use crate::terminal::cells::line::RendererAction;
 use crate::terminal::cells::Cells;
 use crate::terminal::event::Events;
 use crate::terminal::renderer::TerminalRenderer;
+use crate::terminal::shell::Shell;
 
 mod cells;
 mod event;
 pub mod renderer;
-
-lazy_static! {
-    static ref SIGCHLD_FLAG: AtomicBool = AtomicBool::new(false);
-}
-
-extern "C" fn handle_sigchld(signal: libc::c_int) {
-    let signal = Signal::try_from(signal).unwrap();
-    let _result = wait::wait().unwrap();
-    SIGCHLD_FLAG.store(signal == Signal::SIGCHLD, Ordering::Relaxed);
-}
+mod shell;
 
 const BLOCK_CHARACTER: char = '█';
 const BACKGROUND_COLOR: Rgb = Rgb::new(32, 32, 32);
@@ -42,53 +30,37 @@ const FONT_COLOR: Rgb = Rgb::new(249, 250, 244);
 #[derive(Debug)]
 pub struct Terminal {
     input: InputTerminal,
+    shell: Shell,
     renderer: TerminalRenderer,
     cells: Cells,
-    master_fd: RawFd,
     events: Events,
 }
 
 impl Terminal {
-    pub fn new(input: InputTerminal, display: Display, font: FontRenderer) -> Result<Self> {
+    pub fn new(
+        input: InputTerminal,
+        display: Display,
+        font: FontRenderer,
+        shell_path: &str,
+    ) -> Result<Self> {
         let display_size = display.size();
         let cell_size = font.character_size(BLOCK_CHARACTER);
         let size = display_size.fit_cells(cell_size);
+        let shell = Shell::spawn(size, shell_path, &[display.device_fd()])?;
         let renderer = TerminalRenderer::new(display, font, size, cell_size);
         let cells = Cells::new(size);
+        let events = Events::new()?;
 
-        let size = Winsize {
-            ws_row: size.height() as libc::c_ushort,
-            ws_col: size.width() as libc::c_ushort,
-            ws_xpixel: 0, // unused
-            ws_ypixel: 0, // unused
-        };
-        let result = unsafe { pty::forkpty(Some(&size), None)? };
-        match result.fork_result {
-            ForkResult::Parent { .. } => {
-                let handler = SigHandler::Handler(handle_sigchld);
-                let action = SigAction::new(handler, SaFlags::empty(), SigSet::empty());
-                unsafe { signal::sigaction(Signal::SIGCHLD, &action)? };
-                let events = Events::new()?;
-
-                Ok(Self {
-                    input,
-                    renderer,
-                    cells,
-                    master_fd: result.master,
-                    events,
-                })
-            }
-            ForkResult::Child => {
-                unistd::execv(
-                    &CString::new("/usr/bin/sh")?,
-                    &[CString::new("/usr/bin/sh")?],
-                )?;
-                unreachable!()
-            }
-        }
+        Ok(Self {
+            input,
+            renderer,
+            cells,
+            events,
+            shell,
+        })
     }
 
-    pub fn run(&mut self) -> Result<()> {
+    pub fn run(mut self) -> Result<()> {
         self.renderer.fill_all(BACKGROUND_COLOR);
         self.push_string("ft 0.1.0");
         self.cells.carriage_return();
@@ -97,21 +69,40 @@ impl Terminal {
             self.render_all();
         }
 
-        self.events.register_read_event(self.master_fd)?;
+        self.events.register_read_event(self.shell.master_fd())?;
         self.events
             .register_read_event(InputTerminal::TERMINAL_FD)?;
+        self.events.register_read_event(self.shell.pid_fd())?;
 
         let mut events = [EpollEvent::empty(); 4];
         let mut bytes = [0; 4096];
 
         log::debug!("Entering main loop");
-        while !SIGCHLD_FLAG.load(Ordering::Relaxed) {
+        loop {
             log::debug!("Waiting for new event...");
             let events = self.events.wait(&mut events)?;
             log::debug!("epoll_wait passed, available events: {:?}", events);
 
             for event in events {
                 let source = event.data() as RawFd;
+                let flags = event.events();
+
+                if flags == EpollFlags::EPOLLHUP && source == self.shell.master_fd() {
+                    self.events.unregister_event(self.shell.master_fd())?;
+                    unistd::close(self.shell.master_fd())?;
+                    log::debug!("Shell closed");
+                    continue;
+                }
+
+                let pid_fd = self.shell.pid_fd();
+                if source == pid_fd {
+                    log::debug!("Wait for shell status");
+                    let status = wait::waitid(Id::PIDFd(pid_fd), WaitPidFlag::WEXITED)?;
+                    log::info!("Shell exit status: {:?}", status);
+                    unistd::close(pid_fd)?;
+                    self.finish()?;
+                    return Ok(());
+                }
 
                 let bytes_read = unistd::read(source, &mut bytes)?;
                 let bytes = &bytes[0..bytes_read];
@@ -124,38 +115,48 @@ impl Terminal {
                 );
 
                 if source == InputTerminal::TERMINAL_FD {
-                    unistd::write(self.master_fd, bytes)?;
+                    let result = unistd::write(self.shell.master_fd(), bytes);
+                    match result {
+                        Err(Errno::EBADF) => {
+                            log::warn!("Cannot write to master fd");
+                        }
+                        Err(_) => {
+                            result?;
+                        }
+                        _ => {}
+                    }
                     continue;
                 }
 
-                let mut refresh = false;
-                for byte in bytes {
-                    let byte = *byte;
-
-                    if byte == 13 {
-                        self.cells.carriage_return();
-                        continue;
-                    }
-
-                    if byte == 10 {
-                        let action = self.cells.new_line();
-                        if let Some(RendererAction::RenderAll) = action {
-                            refresh = true;
-                        }
-                        continue;
-                    }
-
-                    self.push_character(byte as char);
-                }
-
-                if refresh {
-                    self.render_all();
-                }
+                self.handle_bytes(bytes);
             }
         }
-        log::debug!("Exiting main loop");
+    }
 
-        Ok(())
+    fn handle_bytes(&mut self, bytes: &[u8]) {
+        let mut refresh = false;
+        for byte in bytes {
+            let byte = *byte;
+
+            if byte == 13 {
+                self.cells.carriage_return();
+                continue;
+            }
+
+            if byte == 10 {
+                let action = self.cells.new_line();
+                if let Some(RendererAction::RenderAll) = action {
+                    refresh = true;
+                }
+                continue;
+            }
+
+            self.push_character(byte as char);
+        }
+
+        if refresh {
+            self.render_all();
+        }
     }
 
     fn push_string(&mut self, string: &str) {
@@ -190,8 +191,9 @@ impl Terminal {
         }
     }
 
-    pub fn finish(self) -> Result<()> {
+    fn finish(self) -> Result<()> {
         self.input.finish()?;
+        self.events.finish()?;
         Ok(())
     }
 }

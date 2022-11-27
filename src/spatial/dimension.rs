@@ -1,5 +1,8 @@
 use std::marker::PhantomData;
 
+use nix::libc;
+use nix::pty::Winsize;
+
 use crate::spatial::point::Point;
 use crate::spatial::{CellsUnit, PixelsUnit};
 
@@ -42,5 +45,16 @@ impl Dimensions<PixelsUnit> {
         let width = self.width / cell_size.width;
         let height = self.height / cell_size.height;
         Dimensions::new(width, height)
+    }
+}
+
+impl From<Dimensions<CellsUnit>> for Winsize {
+    fn from(size: Dimensions<CellsUnit>) -> Self {
+        Winsize {
+            ws_row: size.height() as libc::c_ushort,
+            ws_col: size.width() as libc::c_ushort,
+            ws_xpixel: 0, // unused
+            ws_ypixel: 0, // unused
+        }
     }
 }
