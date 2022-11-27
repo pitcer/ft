@@ -5,7 +5,7 @@ use anyhow::{anyhow, Result};
 use fontdue::{Font, FontSettings, Metrics};
 use lru::LruCache;
 
-use crate::dimension::{Dimensions, Pixels};
+use crate::dimension::{Dimensions, PixelsUnit};
 use crate::font::raster_iterator::RasterIterator;
 
 pub mod raster_iterator;
@@ -51,7 +51,7 @@ impl FontRenderer {
         RasterIterator::new(*metrics, raster, self.ascent)
     }
 
-    pub fn character_size(&self, character: char) -> Dimensions<Pixels> {
+    pub fn character_size(&self, character: char) -> Dimensions<PixelsUnit> {
         let metrics = self.font.metrics(character, self.size);
         Dimensions::new(metrics.width as u32, metrics.height as u32)
     }

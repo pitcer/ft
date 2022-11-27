@@ -1,12 +1,12 @@
-#[derive(Debug)]
+#[derive(Debug, Copy, Clone)]
 pub struct Rgb([u8; 3]);
 
 impl Rgb {
-    pub fn new(red: u8, green: u8, blue: u8) -> Self {
+    pub const fn new(red: u8, green: u8, blue: u8) -> Self {
         Self([red, green, blue])
     }
 
-    pub fn new_gray(gray: u8) -> Self {
+    pub const fn new_gray(gray: u8) -> Self {
         Self([gray, gray, gray])
     }
 

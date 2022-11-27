@@ -3,7 +3,7 @@ use std::slice::Iter;
 
 use fontdue::Metrics;
 
-use crate::dimension::Pixels;
+use crate::dimension::PixelsUnit;
 use crate::point::Point;
 use crate::rgb::Rgb;
 
@@ -27,7 +27,7 @@ impl<'a> RasterIterator<'a> {
 }
 
 impl<'a> Iterator for RasterIterator<'a> {
-    type Item = (Point<Pixels>, Rgb);
+    type Item = (Point<PixelsUnit>, Rgb);
 
     fn next(&mut self) -> Option<Self::Item> {
         let (index, gray) = self.raster_iterator.next()?;

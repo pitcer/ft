@@ -3,7 +3,7 @@ use std::slice;
 use anyhow::Result;
 use framebuffer::Framebuffer;
 
-use crate::dimension::{Dimensions, Pixels};
+use crate::dimension::{Dimensions, PixelsUnit};
 use crate::display::pixel::DisplayPixel;
 use crate::point::Point;
 
@@ -29,7 +29,7 @@ impl Display {
         Ok(Self { framebuffer })
     }
 
-    pub fn pixel_mut(&mut self, pixel: Point<Pixels>) -> DisplayPixel {
+    pub fn pixel_mut(&mut self, pixel: Point<PixelsUnit>) -> DisplayPixel {
         let size = self.size();
         debug_assert!(size.contains(pixel));
 
@@ -53,7 +53,7 @@ impl Display {
         self.framebuffer.frame.fill(0);
     }
 
-    pub fn size(&self) -> Dimensions<Pixels> {
+    pub fn size(&self) -> Dimensions<PixelsUnit> {
         let width = self.framebuffer.var_screen_info.xres;
         let height = self.framebuffer.var_screen_info.yres;
         Dimensions::new(width, height)
