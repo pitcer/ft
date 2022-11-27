@@ -1,14 +1,13 @@
 use std::ffi::CString;
 use std::os::unix::io::RawFd;
-use std::slice;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use anyhow::Result;
 use lazy_static::lazy_static;
 use nix::pty::Winsize;
-use nix::sys::epoll::{EpollEvent, EpollFlags, EpollOp};
+use nix::sys::epoll::EpollEvent;
 use nix::sys::signal::{SaFlags, SigAction, SigHandler, SigSet, Signal};
-use nix::sys::{epoll, signal, wait};
+use nix::sys::{signal, wait};
 use nix::unistd::ForkResult;
 use nix::{libc, pty, unistd};
 
@@ -18,9 +17,11 @@ use crate::font::FontRenderer;
 use crate::input::InputTerminal;
 use crate::spatial::point::Point;
 use crate::terminal::cells::{Cells, RendererAction};
+use crate::terminal::event::Events;
 use crate::terminal::renderer::TerminalRenderer;
 
 mod cells;
+mod event;
 pub mod renderer;
 
 lazy_static! {
@@ -43,6 +44,7 @@ pub struct Terminal {
     renderer: TerminalRenderer,
     cells: Cells,
     master_fd: RawFd,
+    events: Events,
 }
 
 impl Terminal {
@@ -65,12 +67,14 @@ impl Terminal {
                 let handler = SigHandler::Handler(handle_sigchld);
                 let action = SigAction::new(handler, SaFlags::empty(), SigSet::empty());
                 unsafe { signal::sigaction(Signal::SIGCHLD, &action)? };
+                let events = Events::new()?;
 
                 Ok(Self {
                     input,
                     renderer,
                     cells,
                     master_fd: result.master,
+                    events,
                 })
             }
             ForkResult::Child => {
@@ -92,56 +96,61 @@ impl Terminal {
             self.render_all();
         }
 
-        let epoll = epoll::epoll_create()?;
-        let mut event = EpollEvent::new(EpollFlags::EPOLLIN, self.master_fd as u64);
-        epoll::epoll_ctl(
-            epoll,
-            EpollOp::EpollCtlAdd,
-            self.master_fd,
-            Some(&mut event),
-        )?;
-        let mut event = EpollEvent::new(EpollFlags::EPOLLIN, InputTerminal::TERMINAL_FD as u64);
-        epoll::epoll_ctl(
-            epoll,
-            EpollOp::EpollCtlAdd,
-            InputTerminal::TERMINAL_FD,
-            Some(&mut event),
-        )?;
+        self.events.register_read_event(self.master_fd)?;
+        self.events
+            .register_read_event(InputTerminal::TERMINAL_FD)?;
 
-        let mut events = EpollEvent::empty();
+        let mut events = [EpollEvent::empty(); 4];
+        let mut bytes = [0; 4096];
 
         log::debug!("Entering main loop");
         while !SIGCHLD_FLAG.load(Ordering::Relaxed) {
-            log::debug!("epoll_wait");
-            let count = epoll::epoll_wait(epoll, slice::from_mut(&mut events), -1)?;
-            assert_eq!(count, 1);
+            log::debug!("Waiting for new event...");
+            let events = self.events.wait(&mut events)?;
+            log::debug!("epoll_wait passed, available events: {:?}", events);
 
-            let fd = events.data();
-            log::debug!("epoll_wait passed, available data on fd {}", fd);
-            let mut byte = 0;
-            let bytes_read = unistd::read(fd as RawFd, slice::from_mut(&mut byte))?;
-            assert_eq!(bytes_read, 1);
-            log::debug!("read on fd {}: '{}' ({})", fd, byte as char, byte);
+            for event in events {
+                let source = event.data() as RawFd;
 
-            if fd == 0 {
-                unistd::write(self.master_fd, slice::from_ref(&byte))?;
-                continue;
-            }
+                let bytes_read = unistd::read(source, &mut bytes)?;
+                let bytes = &bytes[0..bytes_read];
+                log::debug!(
+                    "Read on fd {} ({} bytes): \"{}\" ({:?})",
+                    source,
+                    bytes.len(),
+                    String::from_utf8_lossy(bytes),
+                    bytes
+                );
 
-            if byte == 13 {
-                self.cells.carriage_return();
-                continue;
-            }
+                if source == InputTerminal::TERMINAL_FD {
+                    unistd::write(self.master_fd, bytes)?;
+                    continue;
+                }
 
-            if byte == 10 {
-                let action = self.cells.new_line();
-                if let Some(RendererAction::RenderAll) = action {
+                let mut refresh = false;
+                for byte in bytes {
+                    let byte = *byte;
+
+                    if byte == 13 {
+                        self.cells.carriage_return();
+                        continue;
+                    }
+
+                    if byte == 10 {
+                        let action = self.cells.new_line();
+                        if let Some(RendererAction::RenderAll) = action {
+                            refresh = true;
+                        }
+                        continue;
+                    }
+
+                    self.push_character(byte as char);
+                }
+
+                if refresh {
                     self.render_all();
                 }
-                continue;
             }
-
-            self.push_character(byte as char);
         }
         log::debug!("Exiting main loop");
 

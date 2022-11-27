@@ -42,7 +42,7 @@ impl Cells {
             }
         } else {
             self.current_cell = self.current_cell.shifted(1, 0);
-            log::debug!("New current cell: {:?}", self.current_cell);
+            log::trace!("New current cell: {:?}", self.current_cell);
         }
         RendererAction::RenderCell(cell_point)
     }
@@ -50,7 +50,7 @@ impl Cells {
     pub fn carriage_return(&mut self) {
         let vertical_distance = self.current_cell.vertical_distance();
         self.current_cell = Point::new(0, vertical_distance);
-        log::debug!("New current cell: {:?}", self.current_cell);
+        log::trace!("New current cell: {:?}", self.current_cell);
     }
 
     pub fn new_line(&mut self) -> Option<RendererAction> {
@@ -58,11 +58,11 @@ impl Cells {
             self.lines.rotate_left(1);
             let line = self.lines.back_mut().expect("Height is at least 1");
             line.clear();
-            log::debug!("Lines rotated");
+            log::trace!("Lines rotated");
             Some(RendererAction::RenderAll)
         } else {
             self.current_cell = self.current_cell.shifted(0, 1);
-            log::debug!("New current cell: {:?}", self.current_cell);
+            log::trace!("New current cell: {:?}", self.current_cell);
             None
         }
     }
