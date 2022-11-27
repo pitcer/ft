@@ -4,6 +4,9 @@ use std::collections::VecDeque;
 use crate::spatial::dimension::Dimensions;
 use crate::spatial::point::Point;
 use crate::spatial::CellsUnit;
+use crate::terminal::cells::line::{Cell, Line, RendererAction};
+
+pub mod line;
 
 #[derive(Debug)]
 pub struct Cells {
@@ -32,7 +35,7 @@ impl Cells {
         let cell_point = self.current_cell;
 
         let cell = self.cell_mut(cell_point);
-        cell.character = Some(character);
+        *cell.character_mut() = Some(character);
 
         if self.current_cell.horizontal_distance() == self.size.width() - 1 {
             self.carriage_return();
@@ -75,48 +78,6 @@ impl Cells {
         let line_index = cell.vertical_distance() as usize;
         let line = &mut self.lines[line_index];
         let cell_index = cell.horizontal_distance() as usize;
-        &mut line.cells[cell_index]
+        line.cell_mut(cell_index)
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct Line {
-    cells: Vec<Cell>,
-}
-
-impl Line {
-    pub fn new(length: usize) -> Self {
-        let cells = vec![Cell::new(); length];
-        Self { cells }
-    }
-
-    pub fn iter(&self) -> std::slice::Iter<Cell> {
-        self.cells.iter()
-    }
-
-    pub fn clear(&mut self) {
-        for cell in &mut self.cells {
-            cell.character = None;
-        }
-    }
-}
-
-#[derive(Debug, Copy, Clone)]
-pub struct Cell {
-    character: Option<char>,
-}
-
-impl Cell {
-    pub fn new() -> Self {
-        Self { character: None }
-    }
-
-    pub fn character(&self) -> Option<char> {
-        self.character
-    }
-}
-
-pub enum RendererAction {
-    RenderAll,
-    RenderCell(Point<CellsUnit>),
 }
