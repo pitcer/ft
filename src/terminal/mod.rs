@@ -9,7 +9,7 @@ use nix::pty::Winsize;
 use nix::sys::epoll::{EpollEvent, EpollFlags, EpollOp};
 use nix::sys::signal::{SaFlags, SigAction, SigHandler, SigSet, Signal};
 use nix::sys::{epoll, signal, wait};
-use nix::unistd::{ForkResult, Pid};
+use nix::unistd::ForkResult;
 use nix::{libc, pty, unistd};
 
 use crate::color::Rgb;
@@ -43,7 +43,6 @@ pub struct Terminal {
     renderer: TerminalRenderer,
     cells: Cells,
     master_fd: RawFd,
-    child: Pid,
 }
 
 impl Terminal {
@@ -62,7 +61,7 @@ impl Terminal {
         };
         let result = unsafe { pty::forkpty(Some(&size), None)? };
         match result.fork_result {
-            ForkResult::Parent { child } => {
+            ForkResult::Parent { .. } => {
                 let handler = SigHandler::Handler(handle_sigchld);
                 let action = SigAction::new(handler, SaFlags::empty(), SigSet::empty());
                 unsafe { signal::sigaction(Signal::SIGCHLD, &action)? };
@@ -72,7 +71,6 @@ impl Terminal {
                     renderer,
                     cells,
                     master_fd: result.master,
-                    child,
                 })
             }
             ForkResult::Child => {
@@ -102,11 +100,11 @@ impl Terminal {
             self.master_fd,
             Some(&mut event),
         )?;
-        let mut event = EpollEvent::new(EpollFlags::EPOLLIN, libc::STDIN_FILENO as u64);
+        let mut event = EpollEvent::new(EpollFlags::EPOLLIN, InputTerminal::TERMINAL_FD as u64);
         epoll::epoll_ctl(
             epoll,
             EpollOp::EpollCtlAdd,
-            libc::STDIN_FILENO,
+            InputTerminal::TERMINAL_FD,
             Some(&mut event),
         )?;
 

@@ -49,10 +49,6 @@ impl Display {
         }
     }
 
-    pub fn clear(&mut self) {
-        self.framebuffer.frame.fill(0);
-    }
-
     pub fn size(&self) -> Dimensions<PixelsUnit> {
         let width = self.framebuffer.var_screen_info.xres;
         let height = self.framebuffer.var_screen_info.yres;

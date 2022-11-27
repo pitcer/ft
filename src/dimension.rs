@@ -24,17 +24,6 @@ impl<Unit> Dimensions<Unit> {
         }
     }
 
-    pub fn vector_length(&self) -> usize {
-        self.width as usize * self.height as usize
-    }
-
-    pub fn point(&self, index: usize) -> Point<Unit> {
-        let horizontal_distance = index % self.width as usize;
-        let vertical_distance = index / self.width as usize;
-        debug_assert!(vertical_distance <= self.height as usize);
-        Point::new(horizontal_distance as u32, vertical_distance as u32)
-    }
-
     pub fn vector_index(&self, point: Point<Unit>) -> usize {
         self.width as usize * point.vertical_distance() as usize
             + point.horizontal_distance() as usize
